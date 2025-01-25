@@ -9,7 +9,25 @@ builder.Services.AddControllersWithViews();
 builder.Services.AddDbContext<DataContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
+// Registrar SeedDb como um serviço
+builder.Services.AddTransient<SeedDb>();
+
 var app = builder.Build();
+
+// Execute o SeedDb para popular o banco de dados
+using (var scope = app.Services.CreateScope())
+{
+    var services = scope.ServiceProvider;
+    try
+    {
+        var seedDb = services.GetRequiredService<SeedDb>();
+        await seedDb.SeedAsync(); 
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"Error executing SeedDb: {ex.Message}");
+    }
+}
 
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())
