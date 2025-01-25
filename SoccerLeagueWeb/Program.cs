@@ -1,5 +1,6 @@
 using SoccerLeagueWeb.Data;
 using Microsoft.EntityFrameworkCore;
+using SoccerLeagueWeb.Data.Repositories;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -11,6 +12,9 @@ builder.Services.AddDbContext<DataContext>(options =>
 
 // Registrar SeedDb como um serviço
 builder.Services.AddTransient<SeedDb>();
+
+// Configura a injeção de dependência para repositórios
+builder.Services.AddScoped<IClubRepository, ClubRepository>();
 
 var app = builder.Build();
 

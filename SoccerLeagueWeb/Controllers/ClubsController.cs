@@ -1,23 +1,24 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using SoccerLeagueLibrary.Data.Entities;
+using SoccerLeagueWeb.Data.Repositories;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using SoccerLeagueLibrary.Data.Entities;
-using SoccerLeagueWeb.Data;
 
 namespace SoccerLeagueWeb.Controllers
 {
     public class ClubsController : Controller
     {
-        private readonly DataContext _context;
+        private readonly IClubRepository _clubRepository;
 
-        public ClubsController(DataContext context)
+        public ClubsController(IClubRepository clubRepository)
         {
-            _context = context;
+            _clubRepository = clubRepository;
         }
 
         // GET: Clubs
         public async Task<IActionResult> Index()
         {
-            return View(await _context.Clubs.ToListAsync());
+            var clubs = await _clubRepository.GetAll().ToListAsync();
+            return View(clubs);
         }
 
         // GET: Clubs/Details/5
@@ -28,8 +29,7 @@ namespace SoccerLeagueWeb.Controllers
                 return NotFound();
             }
 
-            var club = await _context.Clubs
-                .FirstOrDefaultAsync(m => m.Id == id);
+            var club = await _clubRepository.GetByIdAsync(id.Value);
             if (club == null)
             {
                 return NotFound();
@@ -49,12 +49,11 @@ namespace SoccerLeagueWeb.Controllers
         // For more details, see http://go.microsoft.com/fwlink/?LinkId=317598.
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Create([Bind("Id,Name,Location,Founded")] Club club)
+        public async Task<IActionResult> Create(Club club)
         {
             if (ModelState.IsValid)
             {
-                _context.Add(club);
-                await _context.SaveChangesAsync();
+                await _clubRepository.CreateAsync(club); // Adicione await aqui
                 return RedirectToAction(nameof(Index));
             }
             return View(club);
@@ -68,7 +67,7 @@ namespace SoccerLeagueWeb.Controllers
                 return NotFound();
             }
 
-            var club = await _context.Clubs.FindAsync(id);
+            var club = await _clubRepository.GetByIdAsync(id.Value);
             if (club == null)
             {
                 return NotFound();
@@ -81,7 +80,7 @@ namespace SoccerLeagueWeb.Controllers
         // For more details, see http://go.microsoft.com/fwlink/?LinkId=317598.
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Edit(int id, [Bind("Id,Name,Location,Founded")] Club club)
+        public async Task<IActionResult> Edit(int id, Club club)
         {
             if (id != club.Id)
             {
@@ -92,19 +91,11 @@ namespace SoccerLeagueWeb.Controllers
             {
                 try
                 {
-                    _context.Update(club);
-                    await _context.SaveChangesAsync();
+                    await _clubRepository.UpdateAsync(club);
                 }
                 catch (DbUpdateConcurrencyException)
                 {
-                    if (!ClubExists(club.Id))
-                    {
-                        return NotFound();
-                    }
-                    else
-                    {
-                        throw;
-                    }
+                    throw;
                 }
                 return RedirectToAction(nameof(Index));
             }
@@ -119,8 +110,7 @@ namespace SoccerLeagueWeb.Controllers
                 return NotFound();
             }
 
-            var club = await _context.Clubs
-                .FirstOrDefaultAsync(m => m.Id == id);
+            var club = await _clubRepository.GetByIdAsync(id.Value);
             if (club == null)
             {
                 return NotFound();
@@ -134,19 +124,14 @@ namespace SoccerLeagueWeb.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> DeleteConfirmed(int id)
         {
-            var club = await _context.Clubs.FindAsync(id);
+            var club = await _clubRepository.GetByIdAsync(id);
             if (club != null)
             {
-                _context.Clubs.Remove(club);
+                await _clubRepository.DeleteAsync(club);
+                return RedirectToAction(nameof(Index));
             }
-
-            await _context.SaveChangesAsync();
             return RedirectToAction(nameof(Index));
         }
 
-        private bool ClubExists(int id)
-        {
-            return _context.Clubs.Any(e => e.Id == id);
-        }
     }
 }

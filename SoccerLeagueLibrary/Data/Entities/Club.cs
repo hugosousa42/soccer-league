@@ -1,6 +1,6 @@
 ﻿namespace SoccerLeagueLibrary.Data.Entities
 {
-    public class Club
+    public class Club : IEntity
     {
         public int Id { get; set; }
 
