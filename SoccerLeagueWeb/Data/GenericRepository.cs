@@ -22,13 +22,11 @@ namespace SoccerLeagueWeb.Data
             _context.Set<T>().Update(entity);
             await SaveAllAsync();
         }
-
         public async Task DeleteAsync(T entity)
         {
             _context.Set<T>().Remove(entity);
             await SaveAllAsync();
         }
-
         public async Task<bool> ExistsAsync(int id)
         {
             return await _context.Set<T>().AnyAsync(x => x.Id == id);

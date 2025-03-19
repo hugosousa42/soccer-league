@@ -10,5 +10,6 @@ namespace SoccerLeagueWeb.Data
         }
 
         public DbSet<Club> Clubs { get; set; }
+        public DbSet<SoccerLeagueLibrary.Data.Entities.Player> Player { get; set; } = default!;
     }
 }

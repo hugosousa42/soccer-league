@@ -15,6 +15,7 @@ builder.Services.AddTransient<SeedDb>();
 
 // Configura a injeção de dependência para repositórios
 builder.Services.AddScoped<IClubRepository, ClubRepository>();
+builder.Services.AddScoped<IPlayerRepository, PlayerRepository>();
 
 var app = builder.Build();
 
