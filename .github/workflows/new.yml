@@ -1,0 +1,136 @@
+name: Criar nota e enviar para repo privado
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  generate_note:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clonar o repositório público com histórico completo
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          
+      - name: Preparar notas de diff
+        id: prepare_note
+        run: |
+          TIMESTAMP=$(date +'%Y-%m-%d_%H-%M-%S')
+          REPO_NAME=$(basename $(git config --get remote.origin.url | sed 's/\.git$//'))
+          NOTE_FILE="${REPO_NAME} - commit-${GITHUB_SHA:0:7} - ${TIMESTAMP}.md"
+          echo "note_file=${NOTE_FILE}" >> $GITHUB_OUTPUT
+          echo "repo_name=${REPO_NAME}" >> $GITHUB_OUTPUT
+
+          COMMIT_MESSAGE=$(git log -1 --pretty=format:'%s')
+          echo "commit_message=${COMMIT_MESSAGE}" >> $GITHUB_ENV
+
+          echo "" >> "${NOTE_FILE}"
+          echo "**Autor:** $(git log -1 --pretty=format:'%an')" >> "${NOTE_FILE}"
+          echo "**Mensagem:** ${COMMIT_MESSAGE}" >> "${NOTE_FILE}"
+          echo "**Data do Commit:** $(git log -1 --pretty=format:'%ad' --date=format:'%Y %b %d %H:%M:%S')" >> "${NOTE_FILE}"
+          echo "**Commit:** [Link do Commit](https://github.com/hugosousa42/RepoTest/commit/$(git log -1 --pretty=format:'%H'))" >> "${NOTE_FILE}"
+          echo "**Files nesse commit:** [Link dos Files](https://github.com/hugosousa42/RepoTest/tree/$(git log -1 --pretty=format:'%H'))" >> "${NOTE_FILE}"
+
+          ADDED_LINES=$(git diff --stat HEAD^ HEAD | grep -o "+" | wc -l)
+          REMOVED_LINES=$(git diff --stat HEAD^ HEAD | grep -o "-" | wc -l)
+          MODIFIED_FILES=$(git diff --name-only HEAD^ HEAD | wc -l)
+          echo "**Linhas Adicionadas:** $ADDED_LINES" >> "${NOTE_FILE}"
+          echo "**Linhas Removidas:** $REMOVED_LINES" >> "${NOTE_FILE}"
+          echo "**Arquivos Modificados:** $MODIFIED_FILES" >> "${NOTE_FILE}"
+          echo "### Diferenças do Commit:" >> "${NOTE_FILE}"
+
+          if [ $(git rev-list --count HEAD) -gt 1 ]; then
+            git diff-tree -r HEAD^ HEAD --no-commit-id --name-only | sort | while read -r file; do
+              if [ -f "$file" ]; then
+                echo "" >> "${NOTE_FILE}"
+                echo "#### Diff para \`$file\`:" >> "${NOTE_FILE}"
+                echo '```diff' >> "${NOTE_FILE}"
+                git diff HEAD^ HEAD -- "$file" >> "${NOTE_FILE}"
+                echo '```' >> "${NOTE_FILE}"
+              fi
+            done
+          else
+            echo "Commit inicial, sem diffs." >> "${NOTE_FILE}"
+          fi
+
+          echo -e "\n\n### Comentários\n\n### Referências\n" >> "${NOTE_FILE}"
+
+      - name: Clonar o repositório privado e enviar nota
+        env:
+          PRIVATE_REPO_URL: ${{ secrets.PRIVATE_REPO_URL }}
+          GH_PAT: ${{ secrets.GH_PAT }}
+        run: |
+          NOTE_FILE="${{ steps.prepare_note.outputs.note_file }}"
+          REPO_NAME="${{ steps.prepare_note.outputs.repo_name }}"
+          LOG_FILE="${REPO_NAME} logs.md"
+          
+          # Criar um diretório temporário para clonar o repositório privado
+          TEMP_DIR="temp_private_repo"
+          mkdir -p "$TEMP_DIR"
+          
+          # Clonar o repositório privado diretamente usando o token
+          echo "Clonando repositório privado..."
+          
+          # Substituir https:// por https://{token}@
+          REPO_CLONE_URL=$(echo "$PRIVATE_REPO_URL" | sed "s|https://|https://${GH_PAT}@|g" | tr -d '\n\r')
+          
+          git clone "$REPO_CLONE_URL" "$TEMP_DIR"
+          
+          if [ $? -ne 0 ]; then
+            echo "Falha ao clonar o repositório privado."
+            exit 1
+          fi
+
+          # Mover para o diretório do repositório privado
+          cd "$TEMP_DIR"
+
+          # Criar diretório Projects se não existir
+          mkdir -p Projects
+          
+          # Mover o arquivo de nota para o diretório Projects
+          mv "../${NOTE_FILE}" ./Projects/
+
+          # Atualizar ou criar o arquivo de log
+          if [ -f "Projects/$LOG_FILE" ]; then
+            TEMP_FILE="temp_log.md"
+            echo "# ${REPO_NAME} - Log de Commits" > "$TEMP_FILE"
+            echo "" >> "$TEMP_FILE"
+            echo "- [[Projects/${NOTE_FILE}]] - $(date +'%Y-%m-%d %H:%M:%S') - ${{ env.commit_message }}" >> "$TEMP_FILE"
+            echo "" >> "$TEMP_FILE"
+            tail -n +3 "Projects/$LOG_FILE" >> "$TEMP_FILE"
+            mv "$TEMP_FILE" "Projects/$LOG_FILE"
+          else
+            echo "# ${REPO_NAME} - Log de Commits" > "Projects/$LOG_FILE"
+            echo "" >> "Projects/$LOG_FILE"
+            echo "- [[Projects/${NOTE_FILE}]] - $(date +'%Y-%m-%d %H:%M:%S') - ${{ env.commit_message }}" >> "Projects/$LOG_FILE"
+          fi
+
+          # Configurar git user
+          git config --global user.email "bot@github.com"
+          git config --global user.name "GitHub Actions Bot"
+          
+          # Adicionar alterações
+          git add .
+
+          # Verificar se há alterações para commit
+          if git diff --staged --quiet; then
+            echo "Nenhuma mudança detectada. Pulando commit."
+            exit 0
+          fi
+
+          # Fazer commit
+          if ! git commit -m "${{ env.commit_message }}"; then
+            echo "Falha ao fazer commit."
+            exit 1
+          fi
+
+          # Fazer push
+          if ! git push; then
+            echo "Falha ao fazer push."
+            exit 1
+          fi
+
+      - name: Limpar ambiente
+        run: |
+          rm -rf temp_private_repo
